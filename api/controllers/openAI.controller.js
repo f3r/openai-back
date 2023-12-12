@@ -8,7 +8,7 @@ async function getSynonyms(req, res) {
       messages: [
         {
           role: "system",
-          content: `Please, can you create a json with the english synonyms for the word ${req.body.text}? The json must have a field called 'synonyms', where the array with each synonym. Thanks!`
+          content: `Please, can you create a json with the english synonyms for the word ${req.body.text}? The json must have a field called 'synonyms', whose value is an array with each synonym. Thanks!`
         },
       ],
       model: "gpt-3.5-turbo-1106",
@@ -41,7 +41,7 @@ async function createDrawing (req, res) {
       const response = await openai.images.generate({
         model: "dall-e-3",
         prompt: `Please, draw a picture for a child's story of the following description: ${line}`,
-      });
+      })
       return response.data
     }))
     return res.json(response)
