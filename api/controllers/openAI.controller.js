@@ -167,7 +167,7 @@ async function functionCalling (req, res) {
         const functionToCall = availableFunctions[functionName]
         const functionArgs = JSON.parse(toolCall.function.arguments)
         const functionResponse = functionToCall(
-          functionArgs
+          functionArgs //Objeto con los argumentos de para la función
         )
 
         messages.push({
@@ -175,13 +175,13 @@ async function functionCalling (req, res) {
           role: "tool",
           name: functionName,
           content: functionResponse,
-        }); // extend conversation with function response
+        }); // Añadir respuesta de la función a la conversación
       }
   
       const secondResponse = await openai.chat.completions.create({
         model: "gpt-3.5-turbo-1106",
         messages: messages,
-      }); // get a new response from the model where it can see the function response
+      }); // Generar nueva respuesta con la cadena de mensajes creada
       return res.json(secondResponse.choices);
     } else {
       return res.json(response.choices);
