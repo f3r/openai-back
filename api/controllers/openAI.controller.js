@@ -92,7 +92,7 @@ function findUserOrders({userId}) {
 
   return userOrders
     .map(order => `Order: ${order.orderId} - Status: ${order.status}`)
-    .join('\n')
+    .join('\n') // Convertir a String para poder añadirlo a la conversación
 }
 
 async function functionCalling (req, res) {
