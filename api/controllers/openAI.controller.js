@@ -78,19 +78,21 @@ const orders = [
   },
 ];
 
-function checkStatus(orderId) {
+function checkStatus({orderId}) {
   const order = orders.find(order => order.orderId === orderId)
   if (!order) return `No order found for id ${orderId}`
 
   return `Order status: ${order.status}`;
 }
 
-function findUserOrders(userId) {
+function findUserOrders({userId}) {
   const userOrders = orders.filter(order => order.userId === userId)
   
   if(!userOrders.length) return `You have no orders`
 
   return userOrders
+    .map(order => `Order: ${order.orderId} - Status: ${order.status}`)
+    .join('\n')
 }
 
 async function functionCalling (req, res) {
@@ -120,6 +122,23 @@ async function functionCalling (req, res) {
           },
         },
       },
+      {
+        type: "function",
+        function: {
+          name: "check_user_orders",
+          description: "Check if the user has any orders",
+          parameters: {
+            type: "object",
+            properties: {
+              userId: {
+                type: "string",
+                description: "User identification to search for",
+              },
+            },
+            required: ["userId"],
+          },
+        },
+      },
     ];
 
     const response = await openai.chat.completions.create({
@@ -134,18 +153,22 @@ async function functionCalling (req, res) {
     const toolCalls = responseMessage.tool_calls;
     if (responseMessage.tool_calls) {
       // Step 3: call the function
-      // Note: the JSON response may not always be valid; be sure to handle errors
       const availableFunctions = {
         check_status: checkStatus,
-      }; // only one function in this example, but you can have multiple
-      messages.push(responseMessage); // extend conversation with assistant's reply
+        check_user_orders: findUserOrders
+
+      };
+
+      // Añadir respuesta a la conversación
+      messages.push(responseMessage)
+      
       for (const toolCall of toolCalls) {
-        const functionName = toolCall.function.name;
-        const functionToCall = availableFunctions[functionName];
-        const functionArgs = JSON.parse(toolCall.function.arguments);
+        const functionName = toolCall.function.name
+        const functionToCall = availableFunctions[functionName]
+        const functionArgs = JSON.parse(toolCall.function.arguments)
         const functionResponse = functionToCall(
-          functionArgs.orderId
-        );
+          functionArgs
+        )
 
         messages.push({
           tool_call_id: toolCall.id,
