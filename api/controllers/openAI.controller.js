@@ -1,6 +1,6 @@
 const OpenAI = require('openai')
 
-const openai = new OpenAI({apiKey: process.env.API_KEY});
+const openai = new OpenAI({apiKey: process.env.API_KEY})
 
 async function getSynonyms(req, res) {
   try {
@@ -50,7 +50,126 @@ async function createDrawing (req, res) {
   }
 }
 
+const orders = [
+  {
+    userId: "1",
+    orderId: "abc",
+    status: "Delivered",
+  },
+  {
+    userId: "1",
+    orderId: "cde",
+    status: "Shipped",
+  },
+  {
+    userId: "2",
+    orderId: "xyz",
+    status: "Delivered",
+  },
+  {
+    userId: "3",
+    orderId: "mno",
+    status: "In Progress",
+  },
+  {
+    userId: "2",
+    orderId: "qwe",
+    status: "Delivered",
+  },
+];
+
+function checkStatus(orderId) {
+  const order = orders.find(order => order.orderId === orderId)
+  if (!order) return `No order found for id ${orderId}`
+
+  return `Order status: ${order.status}`;
+}
+
+function findUserOrders(userId) {
+  const userOrders = orders.filter(order => order.userId === userId)
+  
+  if(!userOrders.length) return `You have no orders`
+
+  return userOrders
+}
+
+async function functionCalling (req, res) {
+  try {
+    const messages = [
+      {
+        role: 'user',
+        content: req.body.query
+      }
+    ]
+
+    const tools = [
+      {
+        type: "function",
+        function: {
+          name: "check_status",
+          description: "Check the status of a specific order",
+          parameters: {
+            type: "object",
+            properties: {
+              orderId: {
+                type: "string",
+                description: "Order identification to search for",
+              },
+            },
+            required: ["orderId"],
+          },
+        },
+      },
+    ];
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo-1106",
+      messages: messages,
+      tools: tools,
+      tool_choice: "auto" //Default value
+    });
+    
+    const responseMessage = response.choices[0].message;
+
+    const toolCalls = responseMessage.tool_calls;
+    if (responseMessage.tool_calls) {
+      // Step 3: call the function
+      // Note: the JSON response may not always be valid; be sure to handle errors
+      const availableFunctions = {
+        check_status: checkStatus,
+      }; // only one function in this example, but you can have multiple
+      messages.push(responseMessage); // extend conversation with assistant's reply
+      for (const toolCall of toolCalls) {
+        const functionName = toolCall.function.name;
+        const functionToCall = availableFunctions[functionName];
+        const functionArgs = JSON.parse(toolCall.function.arguments);
+        const functionResponse = functionToCall(
+          functionArgs.orderId
+        );
+
+        messages.push({
+          tool_call_id: toolCall.id,
+          role: "tool",
+          name: functionName,
+          content: functionResponse,
+        }); // extend conversation with function response
+      }
+  
+      const secondResponse = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo-1106",
+        messages: messages,
+      }); // get a new response from the model where it can see the function response
+      return res.json(secondResponse.choices);
+    } else {
+      return res.json(response.choices);
+    }
+  } catch (error) {
+    return res.send(error)
+  }
+}
+
 module.exports = {
   getSynonyms,
-  createDrawing
+  createDrawing,
+  functionCalling
 }
