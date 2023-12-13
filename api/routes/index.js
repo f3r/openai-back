@@ -8,7 +8,7 @@ const {
 
 router.post("/synonyms", getSynonyms)
 router.post("/drawing", createDrawing)
-router.get("/chatbot", functionCalling)
+router.post("/chatbot", functionCalling)
 
 
 module.exports = router;
