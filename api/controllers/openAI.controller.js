@@ -1,6 +1,6 @@
 const OpenAI = require('openai')
 
-const openai = new OpenAI({apiKey: process.env.API_KEY})
+const openai = new OpenAI()
 
 async function getSynonyms(req, res) {
   try {
@@ -8,13 +8,41 @@ async function getSynonyms(req, res) {
       messages: [
         {
           role: "system",
-          content: `Please, can you create a json with the english synonyms for the word ${req.body.text}? The json must have a field called 'synonyms', whose value is an array with each synonym. Thanks!`
+          content: `Create a json with the english synonyms for the word ${req.body.text}?
+
+          The json must have a field called 'synonyms', whose value is an array with each synonym.`
         },
       ],
       model: "gpt-3.5-turbo-1106",
       response_format: { type: "json_object" },
     });
-  
+    console.log(completion)
+
+    return res.json(completion.choices[0]);
+  } catch (error) {
+    return res.send(error)
+  }
+}
+
+async function getStory(req, res) {
+  try {
+    const completion = await openai.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: `
+          I want to create a story for children. I will give you an idea and you will give me a short story of 5 sentences.
+
+          The idea for the story is: ${req.body.idea}
+
+          The json must have a field called 'story', whose value is an array with each line of a story.`
+        },
+      ],
+      model: "gpt-3.5-turbo-1106",
+      response_format: { type: "json_object" },
+    });
+    console.log(completion)
+
     return res.json(completion.choices[0]);
   } catch (error) {
     return res.send(error)
@@ -23,14 +51,14 @@ async function getSynonyms(req, res) {
 
 async function createDrawing (req, res) {
   try {
-    //DALL-E-2 TE PERMITE CREAR VARIAS IMÁGENES EN UNA MISMA PETICIÓN, PERO SON UNA MIERDA
+    //DALL-E-2 TE PERMITE CREAR VARIAS IMÁGENES EN UNA MISMA PETICIÓN
     // const response = await openai.images.generate({
     //   model: "dall-e-2",
-    //   prompt: `I'm going to pass you 3 lines of a child's story in an object. I would like you to please draw a child's picture for each line: 
+    //   prompt: `I'm going to pass you 3 lines of a child's story in an object. I would like you to please draw a child's picture for each line:
     //    Line 1: ${req.body.line1}
     //    Line 2: ${req.body.line2}
     //    Line 3: ${req.body.line3}
-       
+
     //   Thanks!`,
     //   size: "1024x1024", //default
     //   n: 3
@@ -50,50 +78,7 @@ async function createDrawing (req, res) {
   }
 }
 
-const orders = [
-  {
-    userId: "1",
-    orderId: "abc",
-    status: "Delivered",
-  },
-  {
-    userId: "1",
-    orderId: "cde",
-    status: "Shipped",
-  },
-  {
-    userId: "2",
-    orderId: "xyz",
-    status: "Delivered",
-  },
-  {
-    userId: "3",
-    orderId: "mno",
-    status: "In Progress",
-  },
-  {
-    userId: "2",
-    orderId: "qwe",
-    status: "Delivered",
-  },
-];
-
-function checkStatus({orderId}) {
-  const order = orders.find(order => order.orderId === orderId)
-  if (!order) return `No order found for id ${orderId}`
-
-  return `Order status: ${order.status}`;
-}
-
-function findUserOrders({userId}) {
-  const userOrders = orders.filter(order => order.userId === userId)
-  
-  if(!userOrders.length) return `You have no orders`
-
-  return userOrders
-    .map(order => `Order: ${order.orderId} - Status: ${order.status}`)
-    .join('\n') // Convertir a String para poder añadirlo a la conversación
-}
+const { orders, checkStatus, findUserOrders } = require('./orders')
 
 async function functionCalling (req, res) {
   try {
@@ -103,8 +88,9 @@ async function functionCalling (req, res) {
         content: req.body.query
       }
     ]
+    console.log('messages', messages)
 
-    const tools = [
+    const functionsDefinition = [
       {
         type: "function",
         function: {
@@ -130,12 +116,12 @@ async function functionCalling (req, res) {
           parameters: {
             type: "object",
             properties: {
-              userId: {
+              user: {
                 type: "string",
                 description: "User identification to search for",
               },
             },
-            required: ["userId"],
+            required: ["user"],
           },
         },
       },
@@ -144,11 +130,12 @@ async function functionCalling (req, res) {
     const response = await openai.chat.completions.create({
       model: "gpt-3.5-turbo-1106",
       messages: messages,
-      tools: tools,
+      tools: functionsDefinition,
       tool_choice: "auto" //Default value
     });
-    
+
     const responseMessage = response.choices[0].message;
+    console.log('responseMessage', responseMessage)
 
     const toolCalls = responseMessage.tool_calls;
     if (responseMessage.tool_calls) {
@@ -156,12 +143,11 @@ async function functionCalling (req, res) {
       const availableFunctions = {
         check_status: checkStatus,
         check_user_orders: findUserOrders
-
-      };
+      }
 
       // Añadir respuesta a la conversación
       messages.push(responseMessage)
-      
+
       for (const toolCall of toolCalls) {
         const functionName = toolCall.function.name
         const functionToCall = availableFunctions[functionName]
@@ -176,12 +162,17 @@ async function functionCalling (req, res) {
           name: functionName,
           content: functionResponse,
         }); // Añadir respuesta de la función a la conversación
+
+        console.log('messages', messages)
       }
-  
+
       const secondResponse = await openai.chat.completions.create({
         model: "gpt-3.5-turbo-1106",
         messages: messages,
       }); // Generar nueva respuesta con la cadena de mensajes creada
+
+      console.log('secondResponse', secondResponse.choices)
+
       return res.json(secondResponse.choices);
     } else {
       return res.json(response.choices);
@@ -193,6 +184,7 @@ async function functionCalling (req, res) {
 
 module.exports = {
   getSynonyms,
+  getStory,
   createDrawing,
   functionCalling
 }
